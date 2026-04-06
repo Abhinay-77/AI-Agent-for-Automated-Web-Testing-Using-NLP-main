@@ -243,9 +243,9 @@ def create_pdf_report(result: dict) -> str:
 # Initialize AI agent
 try:
     ai_tester = AIWebsiteTester()
-    print("✅ AI Agent initialized successfully with LangGraph + OpenAI + Playwright")
+    print("SUCCESS: AI Agent initialized successfully with LangGraph + OpenAI + Playwright")
 except Exception as e:
-    print(f"❌ Error initializing AI Agent: {e}")
+    print(f"ERROR: Error initializing AI Agent: {e}")
     ai_tester = None
 
 @app.route('/')
@@ -350,5 +350,6 @@ def get_report(filename):
     return jsonify({'error': 'Report not found'}), 404
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Disable reloader to prevent unexpected restarts on some Windows systems
+    app.run(debug=True, use_reloader=False, host='0.0.0.0', port=5000)
 

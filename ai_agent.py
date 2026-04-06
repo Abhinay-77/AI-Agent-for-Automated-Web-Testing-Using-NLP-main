@@ -77,13 +77,15 @@ class AIWebsiteTester:
         # Initialize OpenAI LLM
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise ValueError("OPENAI_API_KEY not found in environment variables")
-        
-        self.llm = ChatOpenAI(
-            model=model_name,
-            temperature=0,
-            api_key=api_key
-        )
+            # If no API key, agent can work in fallback mode
+            self.llm = None
+            print("WARNING: OPENAI_API_KEY not found. AI Agent will work in fallback mode.")
+        else:
+            self.llm = ChatOpenAI(
+                model=model_name,
+                temperature=0,
+                api_key=api_key
+            )
         
         # Initialize Playwright browser
         self.page = None
@@ -164,6 +166,16 @@ class AIWebsiteTester:
         Instruction Parser Module: Interprets natural language and maps to browser actions
         Uses OpenAI GPT with fallback to keyword matching
         """
+        # If no LLM available, use fallback parser
+        if not self.llm:
+            state["parsed_steps"] = self._parse_instruction_fallback(
+                state["instruction"], 
+                state["website_url"]
+            )
+            state["error"] = None
+            state["using_fallback"] = True
+            return state
+            
         try:
             system_prompt = """You are an expert test automation engineer. 
             Parse the natural language test instruction and extract actionable test steps.
@@ -341,15 +353,15 @@ class AIWebsiteTester:
         Code Generation Module: Converts parsed actions into executable Playwright scripts
         Uses OpenAI GPT with fallback to direct code generation
         """
-        # If using fallback parser, use fallback code generator
-        if state.get("using_fallback"):
+        # If using fallback parser or no LLM available, use fallback code generator
+        if state.get("using_fallback") or not self.llm:
             state["generated_code"] = self._generate_playwright_code_fallback(
                 state["parsed_steps"],
                 state["website_url"]
             )
             state["error"] = None
             return state
-        
+            
         try:
             system_prompt = """You are an expert Playwright test automation engineer.
             Generate Python Playwright code based on the parsed test steps.
@@ -991,27 +1003,27 @@ class AIWebsiteTester:
             screenshots = final_state.get("screenshots", [])
             
             if execution_details.get("status") == "success":
-                results.append("✅ Test executed successfully")
+                results.append("[PASS] Test executed successfully")
                 if "message" in execution_details:
                     results.append(execution_details["message"])
                 if "title" in execution_details:
                     results.append(f"Page Title: {execution_details['title']}")
             else:
-                results.append(f"❌ Test execution: {execution_details.get('status', 'unknown')}")
+                results.append(f"[FAIL] Test execution: {execution_details.get('status', 'unknown')}")
                 if "error" in execution_details:
                     results.append(f"Error: {execution_details['error']}")
             
             # Add validation results
             if validations:
-                results.append(f"\n📋 Validations ({len(validations)} checks):")
+                results.append(f"\nValidations ({len(validations)} checks):")
                 for val in validations:
-                    status_icon = "✅" if val.get("status") == "pass" else "⚠️" if val.get("status") == "warning" else "❌"
+                    status_icon = "[PASS]" if val.get("status") == "pass" else "[WARN]" if val.get("status") == "warning" else "[FAIL]"
                     results.append(f"{status_icon} {val.get('message', '')}")
             
             # Add performance metrics
             if "performance" in report:
                 perf = report["performance"]
-                results.append(f"\n⚡ Performance Metrics:")
+                results.append(f"\nPerformance Metrics:")
                 results.append(f"Page load time: {perf.get('loadTime', 0)}ms")
                 if "pageSize" in perf:
                     page_size_kb = perf["pageSize"] / 1024

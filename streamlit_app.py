@@ -678,25 +678,14 @@ def get_ai_agent():
             api_key = api_key.strip().strip('"').strip("'")
             os.environ['OPENAI_API_KEY'] = api_key
         
-        # If no API key, return None but don't fail - agent can work in fallback mode
-        if not api_key or len(api_key) < 10:
-            return None, "OPENAI_API_KEY_NOT_FOUND"
-        
-        # Try to initialize the agent
+        # Try to initialize the agent - it now supports fallback mode without API key
         try:
             agent = AIWebsiteTester()
+            if not api_key or len(api_key) < 10:
+                return agent, "OPENAI_API_KEY_NOT_FOUND"
             return agent, None
-        except ValueError as ve:
-            # This happens when AIWebsiteTester can't find the API key
-            if "OPENAI_API_KEY" in str(ve):
-                # Double-check if key is in environment
-                check_key = os.getenv('OPENAI_API_KEY')
-                if not check_key or len(check_key) < 10:
-                    return None, "OPENAI_API_KEY_NOT_FOUND"
-                else:
-                    # Key exists but agent still failed - might be invalid
-                    return None, f"API key found but initialization failed: {str(ve)}"
-            return None, str(ve)
+        except Exception as e:
+            return None, str(e)
     except Exception as e:
         return None, str(e)
 
@@ -1010,9 +999,10 @@ if error == "OPENAI_API_KEY_NOT_FOUND":
             
             Then restart the app: `streamlit run streamlit_app.py`
             
-            The app will work in limited mode without the API key.
+            The app will work in fallback mode without the API key.
             """)
-    ai_agent = None
+    # Don't set ai_agent to None, it will work in fallback mode
+    pass
 elif error:
     # Other error (not just missing API key)
     st.warning(f"⚠️ AI Agent initialization: {error}")
@@ -1071,7 +1061,7 @@ with col_results:
         st.session_state.test_running = True
         st.session_state.test_result = None
         if not ai_agent:
-            st.error("❌ **AI Agent not available.** Please add your OpenAI API key to use this feature.")
+            st.error("❌ **AI Agent not available.** Initialization failed.")
         elif not PLAYWRIGHT_AVAILABLE:
             st.error("❌ **Playwright package not installed.**")
             st.info("""
